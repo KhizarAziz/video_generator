@@ -3,20 +3,23 @@ from moviepy.editor import (
     ImageClip, AudioFileClip, TextClip, CompositeVideoClip,
     vfx, concatenate_videoclips
 )
+from moviepy.editor import TextClip
+TextClip.list('color')
 from pydub import AudioSegment
 from textwrap import wrap
 from .video_configs import (
     FPS, BRIGHTNESS_FACTOR, SPEED_FACTOR,
-    TITLE_FONTSIZE, TITLE_FONTSIZE_SHADOW, TITLE_FONT, TITLE_COLOR,
-    TITLE_SHADOW_COLOR, TITLE_POSITION, SUBTITLE_FONTSIZE, SUBTITLE_FONTSIZE_SHADOW,
-    SUBTITLE_FONT, SUBTITLE_COLOR, SUBTITLE_SHADOW_COLOR, SUBTITLE_POSITION,
-    MAX_CHARS_PER_LINE, CHUNK_SIZE
+    TITLE_FONTSIZE, TITLE_FONT, TITLE_COLOR,
+    TITLE_POSITION, TITLE_MAX_CHARS_PER_LINE, SUBTITLE_FONTSIZE,
+    SUBTITLE_FONT, SUBTITLE_COLOR, SUBTITLE_POSITION,
+    SUBTITLE_MAX_CHARS_PER_LINE, CHUNK_DURATION, TITLE_STROKE_COLOR,
+    TITLE_METHOD, SUBTITLE_METHOD, SUBTITLE_STROKE_COLOR, TITLE_STROKE_WIDTH, SUBTITLE_STROKE_WIDTH,
+    TITLE_BG_COLOR, SUBTITLE_BG_COLOR
 )
 
-
-def split_text_into_chunks(text: str, chunk_size: int = CHUNK_SIZE) -> list:
+def split_news_script_into_chunks(text: str, audio_duration: int) -> list:
     """
-    Split text into chunks of a specified size.
+    Split new text into chunks of a specified size.
 
     Args:
         text (str): Text to split.
@@ -25,10 +28,15 @@ def split_text_into_chunks(text: str, chunk_size: int = CHUNK_SIZE) -> list:
     Returns:
         list: List of text chunks.
     """
+    # Calculate the number of chunks
+    num_chunks = int(audio_duration // CHUNK_DURATION)
+
+    # Split the text into the calculated number of chunks
     words = text.split()
+    chunk_size = len(words) // num_chunks + (len(words) % num_chunks > 0)
     return [' '.join(words[i:i + chunk_size]) for i in range(0, len(words), chunk_size)]
 
-def create_subtitle_clips(text: str, title: str, duration: float, chunk_size: int = CHUNK_SIZE) -> list:
+def create_subtitle_clips(text: str, title: str, duration: float) -> list:
     """
     Create subtitle clips from text, split into chunks, ensuring each chunk fits within the frame.
 
@@ -40,38 +48,43 @@ def create_subtitle_clips(text: str, title: str, duration: float, chunk_size: in
     Returns:
         list: List of subtitle clips.
     """
-    chunks = split_text_into_chunks(text, chunk_size)
-    chunk_duration = duration / len(chunks)
+
+    chunks = split_news_script_into_chunks(text, duration)
+
+
     subtitle_clips = []
-
     # Create the title clip with bold font and larger size with shadow
-    title_shadow = TextClip(
-        title, fontsize=TITLE_FONTSIZE_SHADOW, font=TITLE_FONT, color=TITLE_SHADOW_COLOR,
-        size=(1080, None), method='caption'
-    ).set_position(TITLE_POSITION, relative=True).set_duration(duration).set_opacity(0.6)
-
+    wrapped_title = "\n".join(wrap(title, TITLE_MAX_CHARS_PER_LINE))
     title_clip = TextClip(
-        title, fontsize=TITLE_FONTSIZE, font=TITLE_FONT, color=TITLE_COLOR,
-        size=(1080, None), method='caption'
+    wrapped_title,
+    fontsize=TITLE_FONTSIZE,
+    font=TITLE_FONT,
+    color=TITLE_COLOR,
+    method=TITLE_METHOD,
+    stroke_color=TITLE_STROKE_COLOR,
+    stroke_width=TITLE_STROKE_WIDTH,  # Width of the stroke for outline effect
+    bg_color = TITLE_BG_COLOR
     ).set_position(TITLE_POSITION, relative=True).set_duration(duration)
 
-    subtitle_clips.append(title_shadow)
+    # subtitle_clips.append(title_shadow)
     subtitle_clips.append(title_clip)
 
     for i, chunk in enumerate(chunks):
-        wrapped_text = "\n".join(wrap(chunk, MAX_CHARS_PER_LINE))
-
-        subtitle_shadow = TextClip(
-            wrapped_text, fontsize=SUBTITLE_FONTSIZE_SHADOW, font=SUBTITLE_FONT, color=SUBTITLE_SHADOW_COLOR,
-            size=(1080, None), method='caption'
-        ).set_position(SUBTITLE_POSITION).set_duration(chunk_duration).set_start(i * chunk_duration)
-
+        wrapped_text = "\n".join(wrap(chunk, SUBTITLE_MAX_CHARS_PER_LINE))
+        clip_duration = CHUNK_DURATION if i < len(chunks) - 1 else duration - (i * CHUNK_DURATION)
+        
         subtitle_clip = TextClip(
-            wrapped_text, fontsize=SUBTITLE_FONTSIZE, font=SUBTITLE_FONT, color=SUBTITLE_COLOR,
-            size=(1080, None), method='caption'
-        ).set_position(SUBTITLE_POSITION).set_duration(chunk_duration).set_start(i * chunk_duration)
+            wrapped_text,
+            font=SUBTITLE_FONT,
+            fontsize=SUBTITLE_FONTSIZE,
+            color=SUBTITLE_COLOR,
+            stroke_color=SUBTITLE_STROKE_COLOR,
+            stroke_width=SUBTITLE_STROKE_WIDTH,  # Width of the stroke for outline effect            
+            method=SUBTITLE_METHOD,
+            bg_color = SUBTITLE_BG_COLOR
+        ).set_position(SUBTITLE_POSITION, relative=True).set_duration(clip_duration).set_start(i * CHUNK_DURATION)
 
-        subtitle_clips.append(subtitle_shadow)
+        # subtitle_clips.append(subtitle_shadow)
         subtitle_clips.append(subtitle_clip)
 
     return subtitle_clips
@@ -157,3 +170,33 @@ def save_video(clip: CompositeVideoClip, output_path: str, fps: int = FPS):
 #     final_clip = final_clip.fx(vfx.speedx, factor=speed_factor)
 #     final_clip.write_videofile(output_path, fps=fps, codec="libx264", audio_codec="aac")
 #     print(f"Video saved to {output_path}")
+
+
+
+
+
+# ---------------- ANOTHER STABLE VERSION ----------------------
+    # TITLE_FONTSIZE = 34
+    # TITLE_FONT = 'Arial-Bold'
+    # TITLE_COLOR = 'white'
+    # TITLE_STROKE_COLOR = 'orange'
+    # TITLE_POSITION = (0, 0.10)
+    # TITLE_MAX_CHARS_PER_LINE = 35
+    # TITLE_SIZE = (1028, None)  # Video size for caption method
+    # TITLE_MAX_CHARS_PER_LINE = 30
+
+
+    # # Create the title clip with bold font and larger size with shadow
+    # wrapped_title = "\n".join(wrap(title, TITLE_MAX_CHARS_PER_LINE))
+    # title_clip = TextClip(
+    # wrapped_title,
+    # fontsize=TITLE_FONTSIZE,
+    # font=TITLE_FONT,
+    # color=TITLE_COLOR,
+    # size=TITLE_SIZE,
+    # method='caption',
+    # stroke_color=TITLE_STROKE_COLOR,
+    # stroke_width=0.4,  # Width of the stroke for outline effect
+    # align='center',
+    # # bg_color = 'black'
+    # ).set_position(TITLE_POSITION, relative=True).set_duration(duration)
