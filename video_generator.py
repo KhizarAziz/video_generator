@@ -14,7 +14,11 @@ from .video_configs import (
     SUBTITLE_FONT, SUBTITLE_COLOR, SUBTITLE_POSITION,
     SUBTITLE_MAX_CHARS_PER_LINE, CHUNK_DURATION, TITLE_STROKE_COLOR,
     TITLE_METHOD, SUBTITLE_METHOD, SUBTITLE_STROKE_COLOR, TITLE_STROKE_WIDTH, SUBTITLE_STROKE_WIDTH,
-    TITLE_BG_COLOR, SUBTITLE_BG_COLOR
+    TITLE_BG_COLOR, SUBTITLE_BG_COLOR,
+    
+    BG_BRIGHTNESS_FACTOR, THUMBNAIL_TITLE_FONTSIZE, THUMBNAIL_TITLE_MAX_CHARS_PER_LINE, THUMBNAIL_TITLE_FONT
+    , THUMBNAIL_TITLE_COLOR, THUMBNAIL_TITLE_STROKE_COLOR, THUMBNAIL_TITLE_BG_COLOR, THUMBNAIL_TITLE_METHOD
+    , THUMBNAIL_TITLE_POSITION, THUMBNAIL_TITLE_STROKE_WIDTH, THUMBNAIL_CLIP_DURATION
 )
 
 def split_news_script_into_chunks(text: str, audio_duration: int) -> list:
@@ -89,6 +93,39 @@ def create_subtitle_clips(text: str, title: str, duration: float) -> list:
 
     return subtitle_clips
 
+
+def create_thumbnail(image_path, title_text):
+    """
+    Creates a thumbnail with the specified title text overlaid on the image.
+
+    :param image_path: Path to the input image
+    :param title_text: Text to overlay on the image
+    :return: Thumbnail ImageClip
+    """
+    # Load the image
+    image_clip = ImageClip(image_path)
+    image_clip = image_clip.fx(vfx.colorx, BG_BRIGHTNESS_FACTOR)
+
+    # Create the text clip
+    wrapped_title = "\n".join(wrap(title_text, THUMBNAIL_TITLE_MAX_CHARS_PER_LINE))
+    title_clip = TextClip(
+    wrapped_title,
+    fontsize=THUMBNAIL_TITLE_FONTSIZE,
+    font=THUMBNAIL_TITLE_FONT,
+    color=THUMBNAIL_TITLE_COLOR,
+    method=THUMBNAIL_TITLE_METHOD,
+    stroke_color=THUMBNAIL_TITLE_STROKE_COLOR,
+    stroke_width=THUMBNAIL_TITLE_STROKE_WIDTH,  # Width of the stroke for outline effect
+    bg_color = THUMBNAIL_TITLE_BG_COLOR
+    ).set_position(THUMBNAIL_TITLE_POSITION, relative=True)
+
+    # Combine the image and text clips
+    composite_clip = CompositeVideoClip([image_clip, title_clip])
+
+    return composite_clip
+
+
+
 def create_video_clip(item: dict, fps: int = FPS, brightness_factor: float = BRIGHTNESS_FACTOR) -> CompositeVideoClip:
     """
     Create a video clip (audio attached) from a JSON item.
@@ -113,7 +150,14 @@ def create_video_clip(item: dict, fps: int = FPS, brightness_factor: float = BRI
 
     subtitle_clips = create_subtitle_clips(item['news'], item['title'], audio_duration)
 
-    return CompositeVideoClip([video_clip, *subtitle_clips])
+    # Create thumbnail
+    thumbnail_clip = create_thumbnail(item['frame'], item['title']).set_duration(THUMBNAIL_CLIP_DURATION)
+    # Combine thumbnail and video clips
+    final_video_clip = concatenate_videoclips([thumbnail_clip, CompositeVideoClip([video_clip, *subtitle_clips])])
+
+    return final_video_clip
+    # return CompositeVideoClip([video_clip, *subtitle_clips])
+
 
 
 
@@ -143,17 +187,21 @@ def postprocess_clip(clip: CompositeVideoClip, speed_factor: float = SPEED_FACTO
     """
     return clip.fx(vfx.speedx, factor=speed_factor)
 
-def save_video(clip: CompositeVideoClip, output_path: str, fps: int = FPS):
+def save_video(clip: CompositeVideoClip, output_video_path: str, output_thumbnail_path: str, fps: int = FPS):
     """
     Save the video clip to a file.
 
     Args:
         clip (CompositeVideoClip): Video clip to save.
-        output_path (str): Path to save the final video.
+        output_video_path (str): Path to save the final video.
         fps (int, optional): Frames per second for the video. Defaults to 12.
     """
-    clip.write_videofile(output_path, fps=fps, codec="libx264", audio_codec="aac")
-    print(f"Video saved to {output_path}")
+    # Ensure the directory exists
+    os.makedirs(os.path.dirname(output_video_path), exist_ok=True)
+    # Save the thumbnail as an image
+    clip.save_frame(output_thumbnail_path, t=0)
+    clip.write_videofile(output_video_path, fps=fps, codec="libx264", audio_codec="aac")
+    print(f"Video saved to {output_video_path} and thumbnail {output_thumbnail_path}")
 
 # def process_video_clips(clips: list, output_path: str, fps: int = FPS, speed_factor: float = SPEED_FACTOR):
 #     """
